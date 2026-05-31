@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy</title>
+  </head>
+  <body>
+    <main>
+      <section class="header">
+        <div>
+          <h1 class="title">Privacy</h1>
+          <p class="subtle">ChatGPT WebApp</p>
+        </div>
+        <div class="status-pill" aria-live="polite">
+          <span class="dot" data-status-dot></span>
+          <span data-status-text>Starting</span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="row">
+          <div>
+            <h2>Tracker Blocker</h2>
+            <p>Balanced filtering for known third-party advertising and analytics requests.</p>
+          </div>
+          <div class="metric">
+            <strong data-blocked-count>0</strong>
+            <span>blocked</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <h2>Cache</h2>
+            <p>Temporary network files in the private app profile.</p>
+          </div>
+          <div class="actions">
+            <button data-action="refresh" type="button">Refresh</button>
+            <button data-action="clear-cache" type="button">Clear</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <h2>Site Data</h2>
+            <p>Cookies, local storage, IndexedDB, service workers, and related ChatGPT session data.</p>
+          </div>
+          <div class="actions">
+            <button class="danger" data-action="clear-site-data" type="button">Clear &amp; Sign Out</button>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <h2>Official Site</h2>
+            <p>Open ChatGPT in the system browser.</p>
+          </div>
+          <div class="actions">
+            <button data-action="open-chatgpt" type="button">Open</button>
+          </div>
+        </div>
+
+        <div class="message" data-message aria-live="polite"></div>
+      </section>
+    </main>
+    <script type="module" src="/src/renderer/renderer.ts"></script>
+  </body>
+</html>
+

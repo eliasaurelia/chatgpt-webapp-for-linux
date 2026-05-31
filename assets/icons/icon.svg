@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="ChatGPT WebApp icon">
+  <rect width="256" height="256" rx="48" fill="#f7f7f2"/>
+  <path d="M-20 184 184-20" stroke="#1b665f" stroke-width="25" stroke-linecap="round"/>
+  <path d="M72 278 278 72" stroke="#b57724" stroke-width="23" stroke-linecap="round"/>
+  <rect x="52" y="62" width="152" height="126" rx="31" fill="#1f2422"/>
+  <rect x="72" y="82" width="112" height="67" rx="18" fill="#ecf2ef"/>
+  <path d="M134 166h37l-37 34z" fill="#1f2422"/>
+</svg>
+
