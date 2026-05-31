@@ -9,7 +9,7 @@ import {
 test('creates native Linux window options from saved state', () => {
   assert.deepEqual(
     createWindowOptionsFromState({ width: 1000, height: 700, x: 11, y: 22, maximized: false }),
-    { width: 1000, height: 700, x: 11, y: 22, frame: true, show: false, backgroundColor: '#f7f7f2' },
+    { width: 1000, height: 700, x: 11, y: 22, frame: true, show: true, backgroundColor: '#f7f7f2' },
   );
 });
 

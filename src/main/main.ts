@@ -20,6 +20,7 @@ import { installApplicationMenu } from './menu.ts';
 import { shouldGrantPermission } from './permission-policy.ts';
 import { createPrivacyService, type PrivacyService } from './privacy-service.ts';
 import { readSettings, writeSettings, type AppSettings } from './settings-store.ts';
+import { runStartupSequence } from './startup-sequence.ts';
 import {
   CHATGPT_HOME_URL,
   CHATGPT_SESSION_PARTITION,
@@ -146,12 +147,9 @@ async function createMainWindow(): Promise<void> {
 
   guardNavigation(mainWindow);
 
-  mainWindow.once('ready-to-show', () => {
-    if (settings.window.maximized) {
-      mainWindow?.maximize();
-    }
-    mainWindow?.show();
-  });
+  if (settings.window.maximized) {
+    mainWindow.maximize();
+  }
 
   mainWindow.on('close', () => {
     void saveWindowState();
@@ -207,18 +205,20 @@ async function bootstrap(): Promise<void> {
 
   registerIpcHandlers({ blockerController, privacyService });
 
-  try {
-    await blockerController.start();
-  } catch (error) {
-    console.warn('Tracker blocker failed to initialize:', error);
-  }
-
-  await createMainWindow();
-  installApplicationMenu({
-    blockerController,
-    openSettingsWindow: openPrivacyWindow,
-    privacyService,
-    reloadMainWindow: () => mainWindow?.reload(),
+  await runStartupSequence({
+    startBlocker: () => blockerController.start(),
+    createMainWindow,
+    installMenu: () => {
+      installApplicationMenu({
+        blockerController,
+        openSettingsWindow: openPrivacyWindow,
+        privacyService,
+        reloadMainWindow: () => mainWindow?.reload(),
+      });
+    },
+    onBlockerError: (error) => {
+      console.warn('Tracker blocker failed to initialize:', error);
+    },
   });
 }
 

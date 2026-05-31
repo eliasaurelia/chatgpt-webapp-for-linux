@@ -20,7 +20,7 @@ export function createWindowOptionsFromState(
     ...(state.x === undefined ? {} : { x: state.x }),
     ...(state.y === undefined ? {} : { y: state.y }),
     frame: true,
-    show: false,
+    show: true,
     backgroundColor: '#f7f7f2',
   };
 }
@@ -35,4 +35,3 @@ export function extractWindowState(window: BoundsProvider): WindowSettings {
     maximized: window.isMaximized(),
   };
 }
-
