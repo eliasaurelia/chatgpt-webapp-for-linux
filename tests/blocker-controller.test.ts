@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   EASYLIST_RULE_LISTS,
+  DEFAULT_BLOCKER_LOAD_TIMEOUT_MS,
   GHOSTERY_NETWORK_ONLY_CONFIG,
   allowCoreOpenAiResources,
   createBlockerController,
@@ -117,6 +118,57 @@ test('reports blocker load failures in status', async () => {
 
   assert.equal(controller.getStatus().ready, false);
   assert.equal(controller.getStatus().lastError, 'network unavailable');
+});
+
+test('times out stalled startup loads instead of staying in Starting forever', async () => {
+  const controller = createBlockerController({
+    session: {},
+    loadEngine: async () => new Promise(() => undefined),
+    initialEnabled: true,
+    loadTimeoutMs: 5,
+  });
+  const result = await Promise.race([
+    controller.start().then(
+      () => 'resolved',
+      (error: unknown) => error,
+    ),
+    new Promise<'still-pending'>((resolve) => {
+      setTimeout(() => resolve('still-pending'), 50);
+    }),
+  ]);
+
+  assert.notEqual(result, 'still-pending');
+  assert.match(result instanceof Error ? result.message : String(result), /timed out/i);
+  assert.equal(controller.getStatus().ready, false);
+  assert.match(controller.getStatus().lastError ?? '', /timed out/i);
+});
+
+test('times out stalled manual updates and clears update-in-progress state', async () => {
+  const controller = createBlockerController({
+    session: {},
+    loadEngine: async ({ ignoreCache } = {}) => {
+      if (ignoreCache) {
+        return new Promise(() => undefined);
+      }
+      return {
+        enableBlockingInSession: () => undefined,
+        disableBlockingInSession: () => undefined,
+      };
+    },
+    initialEnabled: true,
+    loadTimeoutMs: 5,
+  });
+
+  await controller.start();
+  await assert.rejects(() => controller.updateRules(), /timed out/i);
+
+  assert.equal(controller.getStatus().updateInProgress, false);
+  assert.match(controller.getStatus().lastError ?? '', /timed out/i);
+});
+
+test('uses a bounded default blocker load timeout', () => {
+  assert.ok(DEFAULT_BLOCKER_LOAD_TIMEOUT_MS > 0);
+  assert.ok(DEFAULT_BLOCKER_LOAD_TIMEOUT_MS <= 15_000);
 });
 
 test('bypasses OpenAI core resources before applying tracker rules', () => {

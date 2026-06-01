@@ -16,6 +16,8 @@ export const EASYLIST_RULE_LISTS = [
   },
 ] as const;
 
+export const DEFAULT_BLOCKER_LOAD_TIMEOUT_MS = 10_000;
+
 export interface BlockerEngine {
   enableBlockingInSession(session: unknown): void;
   disableBlockingInSession(session: unknown): void;
@@ -41,6 +43,7 @@ export interface BlockerControllerOptions {
   loadEngine: (options?: BlockerEngineLoadOptions) => Promise<BlockerEngine>;
   initialEnabled: boolean;
   initialLastUpdatedAt?: string;
+  loadTimeoutMs?: number;
   now?: () => Date;
 }
 
@@ -112,6 +115,7 @@ export function createBlockerController(options: BlockerControllerOptions): Bloc
   const eventBoundEngines = new WeakSet<object>();
   let activeInSession = false;
   const now = options.now ?? (() => new Date());
+  const loadTimeoutMs = options.loadTimeoutMs ?? DEFAULT_BLOCKER_LOAD_TIMEOUT_MS;
 
   function getErrorMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
@@ -130,13 +134,28 @@ export function createBlockerController(options: BlockerControllerOptions): Bloc
     }
   }
 
+  function withLoadTimeout(promise: Promise<BlockerEngine>): Promise<BlockerEngine> {
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<BlockerEngine>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error('Tracker rule loading timed out'));
+      }, loadTimeoutMs);
+    });
+
+    return Promise.race([promise, timeout]).finally(() => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    });
+  }
+
   async function getEngine(loadOptions?: BlockerEngineLoadOptions): Promise<BlockerEngine> {
     try {
       if (loadOptions?.ignoreCache) {
-        engine = await options.loadEngine(loadOptions);
+        engine = await withLoadTimeout(options.loadEngine(loadOptions));
         loadPromise = Promise.resolve(engine);
       } else {
-        loadPromise ??= options.loadEngine();
+        loadPromise ??= withLoadTimeout(options.loadEngine());
         engine = await loadPromise;
       }
 
@@ -147,6 +166,9 @@ export function createBlockerController(options: BlockerControllerOptions): Bloc
     } catch (error) {
       lastError = getErrorMessage(error);
       ready = false;
+      if (!loadOptions?.ignoreCache) {
+        loadPromise = null;
+      }
       throw error;
     }
   }

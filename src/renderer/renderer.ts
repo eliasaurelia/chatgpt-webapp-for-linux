@@ -1,5 +1,9 @@
 import './styles.css';
 
+type BlockerStatus = Awaited<ReturnType<typeof window.chatgptWebApp.getBlockerStatus>>;
+
+const STATUS_REFRESH_INTERVAL_MS = 3000;
+
 const statusDot = document.querySelector<HTMLSpanElement>('[data-status-dot]');
 const statusText = document.querySelector<HTMLElement>('[data-status-text]');
 const blockedCount = document.querySelector<HTMLElement>('[data-blocked-count]');
@@ -31,9 +35,7 @@ function formatUpdatedAt(value: string | undefined): string {
   }).format(new Date(value));
 }
 
-async function refreshStatus(): Promise<void> {
-  const status = await window.chatgptWebApp.getBlockerStatus();
-
+function applyStatus(status: BlockerStatus): void {
   if (statusDot) {
     statusDot.dataset.active = String(status.enabled && status.ready && !status.lastError);
   }
@@ -66,6 +68,20 @@ async function refreshStatus(): Promise<void> {
   }
 }
 
+function handleStatusError(error: unknown): void {
+  if (statusText) {
+    statusText.textContent = 'Error';
+  }
+  if (statusDot) {
+    statusDot.dataset.active = 'false';
+  }
+  setMessage(error instanceof Error ? error.message : 'Unable to read blocker status');
+}
+
+async function refreshStatus(): Promise<void> {
+  applyStatus(await window.chatgptWebApp.getBlockerStatus());
+}
+
 async function runAction(button: HTMLButtonElement | null, action: () => Promise<unknown>, done: string): Promise<void> {
   if (!button) {
     return;
@@ -89,7 +105,13 @@ refreshButton?.addEventListener('click', () => {
 });
 
 updateRulesButton?.addEventListener('click', () => {
-  void runAction(updateRulesButton, () => window.chatgptWebApp.updateBlockerRules(), 'Rules updated');
+  void runAction(
+    updateRulesButton,
+    async () => {
+      applyStatus(await window.chatgptWebApp.updateBlockerRules());
+    },
+    'Rules updated',
+  );
 });
 
 intervalSelect?.addEventListener('change', () => {
@@ -97,7 +119,7 @@ intervalSelect?.addEventListener('change', () => {
   setMessage('Saving...');
   window.chatgptWebApp
     .setBlockerUpdateInterval(Number(intervalSelect.value))
-    .then(() => refreshStatus())
+    .then((status) => applyStatus(status))
     .then(() => setMessage('Update interval saved'))
     .catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'Action failed'))
     .finally(() => {
@@ -121,4 +143,7 @@ openChatGptButton?.addEventListener('click', () => {
   void window.chatgptWebApp.openExternal('https://chatgpt.com');
 });
 
-void refreshStatus();
+void refreshStatus().catch(handleStatusError);
+setInterval(() => {
+  void refreshStatus().catch(handleStatusError);
+}, STATUS_REFRESH_INTERVAL_MS);
