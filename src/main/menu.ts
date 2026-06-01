@@ -7,6 +7,7 @@ export interface MenuDependencies {
   openSettingsWindow(): void;
   privacyService: PrivacyService;
   reloadMainWindow(): void;
+  updateBlockerRules(): Promise<unknown>;
 }
 
 export function installApplicationMenu(dependencies: MenuDependencies): void {
@@ -71,6 +72,12 @@ export function installApplicationMenu(dependencies: MenuDependencies): void {
           label: 'Tracker Blocker Status',
           click: dependencies.openSettingsWindow,
         },
+        {
+          label: 'Update Tracker Rules',
+          click: () => {
+            void dependencies.updateBlockerRules();
+          },
+        },
       ],
     },
     {
@@ -88,4 +95,3 @@ export function installApplicationMenu(dependencies: MenuDependencies): void {
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
-

@@ -2,10 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  EASYLIST_RULE_LISTS,
   GHOSTERY_NETWORK_ONLY_CONFIG,
   allowCoreOpenAiResources,
   createBlockerController,
 } from '../src/main/blocker-controller.ts';
+
+test('uses the standard EasyList and EasyPrivacy subscriptions', () => {
+  assert.deepEqual(
+    EASYLIST_RULE_LISTS.map((list) => list.url),
+    [
+      'https://easylist.to/easylist/easylist.txt',
+      'https://easylist.to/easylist/easyprivacy.txt',
+    ],
+  );
+});
 
 test('uses a network-only Ghostery configuration for ChatGPT compatibility', () => {
   assert.equal(GHOSTERY_NETWORK_ONLY_CONFIG.loadNetworkFilters, true);
@@ -31,7 +42,15 @@ test('enables the Ghostery-backed blocker once for the isolated session', async 
   await controller.start();
 
   assert.deepEqual(calls, ['enable:true']);
-  assert.deepEqual(controller.getStatus(), { enabled: true, ready: true, blockedCount: 0 });
+  assert.deepEqual(controller.getStatus(), {
+    enabled: true,
+    ready: true,
+    blockedCount: 0,
+    updateInProgress: false,
+    lastUpdatedAt: undefined,
+    lastError: undefined,
+    lists: EASYLIST_RULE_LISTS,
+  });
 });
 
 test('disables blocker integration without clearing session data', async () => {
@@ -50,7 +69,54 @@ test('disables blocker integration without clearing session data', async () => {
   await controller.setEnabled(false);
 
   assert.deepEqual(calls, ['enable', 'disable']);
-  assert.deepEqual(controller.getStatus(), { enabled: false, ready: true, blockedCount: 0 });
+  assert.equal(controller.getStatus().enabled, false);
+  assert.equal(controller.getStatus().ready, true);
+  assert.equal(controller.getStatus().blockedCount, 0);
+});
+
+test('manually updates rules, swaps the active engine, and records update time', async () => {
+  const calls: string[] = [];
+  const session = {};
+  const firstEngine = {
+    enableBlockingInSession: () => calls.push('first:enable'),
+    disableBlockingInSession: () => calls.push('first:disable'),
+  };
+  const secondEngine = {
+    enableBlockingInSession: () => calls.push('second:enable'),
+    disableBlockingInSession: () => calls.push('second:disable'),
+  };
+  const controller = createBlockerController({
+    session,
+    loadEngine: async ({ ignoreCache } = {}) => {
+      calls.push(ignoreCache ? 'load:refresh' : 'load:cache');
+      return ignoreCache ? secondEngine : firstEngine;
+    },
+    initialEnabled: true,
+    initialLastUpdatedAt: undefined,
+    now: () => new Date('2026-06-01T00:00:00.000Z'),
+  });
+
+  await controller.start();
+  await controller.updateRules();
+
+  assert.deepEqual(calls, ['load:cache', 'first:enable', 'load:refresh', 'first:disable', 'second:enable']);
+  assert.equal(controller.getStatus().lastUpdatedAt, '2026-06-01T00:00:00.000Z');
+  assert.equal(controller.getStatus().updateInProgress, false);
+});
+
+test('reports blocker load failures in status', async () => {
+  const controller = createBlockerController({
+    session: {},
+    loadEngine: async () => {
+      throw new Error('network unavailable');
+    },
+    initialEnabled: true,
+  });
+
+  await assert.rejects(() => controller.start(), /network unavailable/);
+
+  assert.equal(controller.getStatus().ready, false);
+  assert.equal(controller.getStatus().lastError, 'network unavailable');
 });
 
 test('bypasses OpenAI core resources before applying tracker rules', () => {

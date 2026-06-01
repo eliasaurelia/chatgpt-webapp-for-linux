@@ -22,11 +22,35 @@
         <div class="row">
           <div>
             <h2>Tracker Blocker</h2>
-            <p>Balanced filtering for known third-party advertising and analytics requests.</p>
+            <p data-list-names>EasyList and EasyPrivacy network rules.</p>
           </div>
           <div class="metric">
             <strong data-blocked-count>0</strong>
             <span>blocked</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <h2>Rule Updates</h2>
+            <p>
+              Last update:
+              <span data-last-updated>Never</span>
+            </p>
+            <p class="error-line" data-blocker-error hidden></p>
+          </div>
+          <div class="actions stacked">
+            <button data-action="update-rules" type="button">Update Now</button>
+            <label class="select-label">
+              <span>Every</span>
+              <select data-update-interval>
+                <option value="6">6h</option>
+                <option value="12">12h</option>
+                <option value="24">24h</option>
+                <option value="48">48h</option>
+                <option value="168">7d</option>
+              </select>
+            </label>
           </div>
         </div>
 
@@ -67,4 +91,3 @@
     <script type="module" src="/src/renderer/renderer.ts"></script>
   </body>
 </html>
-

@@ -3,7 +3,12 @@ import './styles.css';
 const statusDot = document.querySelector<HTMLSpanElement>('[data-status-dot]');
 const statusText = document.querySelector<HTMLElement>('[data-status-text]');
 const blockedCount = document.querySelector<HTMLElement>('[data-blocked-count]');
+const listNames = document.querySelector<HTMLElement>('[data-list-names]');
+const lastUpdated = document.querySelector<HTMLElement>('[data-last-updated]');
+const blockerError = document.querySelector<HTMLElement>('[data-blocker-error]');
+const intervalSelect = document.querySelector<HTMLSelectElement>('[data-update-interval]');
 const refreshButton = document.querySelector<HTMLButtonElement>('[data-action="refresh"]');
+const updateRulesButton = document.querySelector<HTMLButtonElement>('[data-action="update-rules"]');
 const clearCacheButton = document.querySelector<HTMLButtonElement>('[data-action="clear-cache"]');
 const clearSiteDataButton = document.querySelector<HTMLButtonElement>('[data-action="clear-site-data"]');
 const openChatGptButton = document.querySelector<HTMLButtonElement>('[data-action="open-chatgpt"]');
@@ -15,21 +20,49 @@ function setMessage(value: string): void {
   }
 }
 
+function formatUpdatedAt(value: string | undefined): string {
+  if (!value) {
+    return 'Never';
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
+}
+
 async function refreshStatus(): Promise<void> {
   const status = await window.chatgptWebApp.getBlockerStatus();
 
   if (statusDot) {
-    statusDot.dataset.active = String(status.enabled && status.ready);
+    statusDot.dataset.active = String(status.enabled && status.ready && !status.lastError);
   }
   if (statusText) {
-    statusText.textContent = status.enabled
-      ? status.ready
-        ? 'Active'
-        : 'Starting'
-      : 'Off';
+    let label = 'Off';
+    if (status.lastError) {
+      label = 'Error';
+    } else if (status.updateInProgress) {
+      label = 'Updating';
+    } else if (status.enabled) {
+      label = status.ready ? 'Active' : 'Starting';
+    }
+    statusText.textContent = label;
   }
   if (blockedCount) {
     blockedCount.textContent = String(status.blockedCount);
+  }
+  if (listNames) {
+    listNames.textContent = status.lists.map((list) => list.name).join(' + ');
+  }
+  if (lastUpdated) {
+    lastUpdated.textContent = formatUpdatedAt(status.lastUpdatedAt);
+  }
+  if (intervalSelect) {
+    intervalSelect.value = String(status.updateIntervalHours);
+  }
+  if (blockerError) {
+    blockerError.hidden = !status.lastError;
+    blockerError.textContent = status.lastError ?? '';
   }
 }
 
@@ -55,6 +88,23 @@ refreshButton?.addEventListener('click', () => {
   void runAction(refreshButton, refreshStatus, 'Status refreshed');
 });
 
+updateRulesButton?.addEventListener('click', () => {
+  void runAction(updateRulesButton, () => window.chatgptWebApp.updateBlockerRules(), 'Rules updated');
+});
+
+intervalSelect?.addEventListener('change', () => {
+  intervalSelect.disabled = true;
+  setMessage('Saving...');
+  window.chatgptWebApp
+    .setBlockerUpdateInterval(Number(intervalSelect.value))
+    .then(() => refreshStatus())
+    .then(() => setMessage('Update interval saved'))
+    .catch((error: unknown) => setMessage(error instanceof Error ? error.message : 'Action failed'))
+    .finally(() => {
+      intervalSelect.disabled = false;
+    });
+});
+
 clearCacheButton?.addEventListener('click', () => {
   void runAction(clearCacheButton, () => window.chatgptWebApp.clearCache(), 'Cache cleared');
 });
@@ -72,4 +122,3 @@ openChatGptButton?.addEventListener('click', () => {
 });
 
 void refreshStatus();
-

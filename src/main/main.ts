@@ -14,12 +14,19 @@ import {
   createBlockerController,
   loadGhosteryEngine,
   type BlockerController,
+  type BlockerStatus,
 } from './blocker-controller.ts';
+import { computeNextBlockerUpdateDelayMs } from './blocker-update-schedule.ts';
 import { registerIpcHandlers } from './ipc.ts';
 import { installApplicationMenu } from './menu.ts';
 import { shouldGrantPermission } from './permission-policy.ts';
 import { createPrivacyService, type PrivacyService } from './privacy-service.ts';
-import { readSettings, writeSettings, type AppSettings } from './settings-store.ts';
+import {
+  readSettings,
+  sanitizeBlockerUpdateIntervalHours,
+  writeSettings,
+  type AppSettings,
+} from './settings-store.ts';
 import { runStartupSequence } from './startup-sequence.ts';
 import {
   CHATGPT_HOME_URL,
@@ -37,6 +44,7 @@ let privacyWindow: BrowserWindow | null = null;
 let settings: AppSettings;
 let blockerController: BlockerController;
 let privacyService: PrivacyService;
+let blockerUpdateTimer: NodeJS.Timeout | null = null;
 
 function configureLinuxChromium(): void {
   if (process.platform !== 'linux') {
@@ -136,6 +144,73 @@ async function saveWindowState(): Promise<void> {
   await writeSettings(settingsPath(), settings);
 }
 
+async function saveSettings(): Promise<void> {
+  await writeSettings(settingsPath(), settings);
+}
+
+function blockerStatusForRenderer(): BlockerStatus & { updateIntervalHours: number } {
+  return {
+    ...blockerController.getStatus(),
+    updateIntervalHours: settings.blocker.updateIntervalHours,
+  };
+}
+
+async function persistBlockerSettings(
+  blockerSettings: Partial<AppSettings['blocker']>,
+): Promise<void> {
+  settings = {
+    ...settings,
+    blocker: {
+      ...settings.blocker,
+      ...blockerSettings,
+    },
+  };
+  await saveSettings();
+}
+
+function clearBlockerUpdateTimer(): void {
+  if (blockerUpdateTimer) {
+    clearTimeout(blockerUpdateTimer);
+    blockerUpdateTimer = null;
+  }
+}
+
+function scheduleBlockerAutoUpdate(delayOverrideMs?: number): void {
+  clearBlockerUpdateTimer();
+
+  const delayMs = delayOverrideMs ?? computeNextBlockerUpdateDelayMs({
+    intervalHours: settings.blocker.updateIntervalHours,
+    lastUpdatedAt: settings.blocker.lastUpdatedAt,
+    now: new Date(),
+  });
+
+  blockerUpdateTimer = setTimeout(() => {
+    void updateBlockerRulesFromNetwork()
+      .catch((error) => {
+        console.warn('Tracker blocker rule update failed:', error);
+        scheduleBlockerAutoUpdate(settings.blocker.updateIntervalHours * 60 * 60 * 1000);
+      });
+  }, delayMs);
+  blockerUpdateTimer.unref();
+}
+
+async function updateBlockerRulesFromNetwork(): Promise<BlockerStatus & { updateIntervalHours: number }> {
+  const status = await blockerController.updateRules();
+  if (status.lastUpdatedAt) {
+    await persistBlockerSettings({ lastUpdatedAt: status.lastUpdatedAt });
+  }
+  scheduleBlockerAutoUpdate();
+  return blockerStatusForRenderer();
+}
+
+async function setBlockerUpdateInterval(hours: number): Promise<BlockerStatus & { updateIntervalHours: number }> {
+  await persistBlockerSettings({
+    updateIntervalHours: sanitizeBlockerUpdateIntervalHours(hours),
+  });
+  scheduleBlockerAutoUpdate();
+  return blockerStatusForRenderer();
+}
+
 async function createMainWindow(): Promise<void> {
   const windowOptions = createWindowOptionsFromState(settings.window);
   mainWindow = new BrowserWindow({
@@ -199,14 +274,24 @@ async function bootstrap(): Promise<void> {
   privacyService = createPrivacyService(chatSession);
   blockerController = createBlockerController({
     session: chatSession,
-    loadEngine: () => loadGhosteryEngine(blockerCachePath()),
+    loadEngine: (loadOptions) => loadGhosteryEngine(blockerCachePath(), loadOptions),
     initialEnabled: settings.blocker.enabled,
+    initialLastUpdatedAt: settings.blocker.lastUpdatedAt,
   });
 
-  registerIpcHandlers({ blockerController, privacyService });
+  registerIpcHandlers({
+    blockerController,
+    privacyService,
+    getBlockerStatus: blockerStatusForRenderer,
+    updateBlockerRules: updateBlockerRulesFromNetwork,
+    setBlockerUpdateInterval,
+  });
 
   await runStartupSequence({
-    startBlocker: () => blockerController.start(),
+    startBlocker: async () => {
+      await blockerController.start();
+      scheduleBlockerAutoUpdate();
+    },
     createMainWindow,
     installMenu: () => {
       installApplicationMenu({
@@ -214,6 +299,7 @@ async function bootstrap(): Promise<void> {
         openSettingsWindow: openPrivacyWindow,
         privacyService,
         reloadMainWindow: () => mainWindow?.reload(),
+        updateBlockerRules: updateBlockerRulesFromNetwork,
       });
     },
     onBlockerError: (error) => {
@@ -251,6 +337,7 @@ if (!hasSingleInstanceLock) {
   });
 
   app.on('before-quit', () => {
+    clearBlockerUpdateTimer();
     void saveWindowState();
   });
 }

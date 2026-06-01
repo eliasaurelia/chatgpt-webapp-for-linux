@@ -1,10 +1,17 @@
 import { ipcMain, shell } from 'electron';
-import type { BlockerController } from './blocker-controller.ts';
+import type { BlockerController, BlockerStatus } from './blocker-controller.ts';
 import type { PrivacyService } from './privacy-service.ts';
+
+export type RendererBlockerStatus = BlockerStatus & {
+  updateIntervalHours: number;
+};
 
 export interface IpcDependencies {
   blockerController: BlockerController;
   privacyService: PrivacyService;
+  getBlockerStatus: () => RendererBlockerStatus;
+  updateBlockerRules: () => Promise<RendererBlockerStatus>;
+  setBlockerUpdateInterval: (hours: number) => Promise<RendererBlockerStatus>;
 }
 
 function isSafeExternalUrl(value: string): boolean {
@@ -20,6 +27,8 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
   ipcMain.removeHandler('privacy.clearCache');
   ipcMain.removeHandler('privacy.clearSiteData');
   ipcMain.removeHandler('privacy.getBlockerStatus');
+  ipcMain.removeHandler('privacy.updateBlockerRules');
+  ipcMain.removeHandler('privacy.setBlockerUpdateInterval');
   ipcMain.removeHandler('app.openExternal');
 
   ipcMain.handle('privacy.clearCache', async () => {
@@ -32,7 +41,17 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     return { ok: true };
   });
 
-  ipcMain.handle('privacy.getBlockerStatus', () => dependencies.blockerController.getStatus());
+  ipcMain.handle('privacy.getBlockerStatus', () => dependencies.getBlockerStatus());
+
+  ipcMain.handle('privacy.updateBlockerRules', async () => dependencies.updateBlockerRules());
+
+  ipcMain.handle('privacy.setBlockerUpdateInterval', async (_event, hours: number) => {
+    if (!Number.isFinite(Number(hours))) {
+      return { ok: false, error: 'Invalid interval' };
+    }
+
+    return dependencies.setBlockerUpdateInterval(Number(hours));
+  });
 
   ipcMain.handle('app.openExternal', async (_event, url: string) => {
     if (!isSafeExternalUrl(url)) {
@@ -43,4 +62,3 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     return { ok: true };
   });
 }
-

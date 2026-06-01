@@ -127,6 +127,11 @@ main {
   gap: 10px;
 }
 
+.actions.stacked {
+  align-items: flex-end;
+  flex-direction: column;
+}
+
 button {
   min-height: 36px;
   border: 1px solid rgba(34, 40, 36, 0.22);
@@ -150,8 +155,31 @@ button:disabled {
   opacity: 0.55;
 }
 
+select {
+  min-height: 34px;
+  border: 1px solid rgba(34, 40, 36, 0.22);
+  border-radius: 7px;
+  padding: 0 8px;
+  color: #222824;
+  background: #ffffff;
+  font: inherit;
+  font-weight: 650;
+}
+
+.select-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #66706b;
+  font-size: 13px;
+}
+
 .danger {
   border-color: rgba(154, 53, 43, 0.32);
+  color: #9a352b;
+}
+
+.error-line {
   color: #9a352b;
 }
 
@@ -207,7 +235,8 @@ button:disabled {
   }
 
   .status-pill,
-  button {
+  button,
+  select {
     border-color: rgba(233, 237, 233, 0.18);
     color: #e9ede9;
     background: rgba(255, 255, 255, 0.08);
@@ -220,5 +249,8 @@ button:disabled {
   .metric strong {
     color: #62c4b8;
   }
-}
 
+  .select-label {
+    color: #a9b3ad;
+  }
+}

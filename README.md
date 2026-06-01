@@ -7,7 +7,7 @@
 - 独立 profile：ChatGPT 的 cookies、localStorage、IndexedDB 等保存在应用自己的 `userData` 目录，不共享系统浏览器数据。
 - 不保存账号密码：应用只保存网站会话和本地偏好，不写入 OpenAI 账号、密码或聊天内容。
 - 隐私隔离：主窗口使用 `persist:chatgpt-private` 分区，远程页面禁用 Node，启用 `contextIsolation`、`sandbox` 和 `webSecurity`。
-- 平衡拦截：默认启用 Ghostery/EasyList/EasyPrivacy 兼容规则，偏向拦截广告、分析和已知追踪资源，同时避免破坏 ChatGPT 登录、聊天、上传和下载。
+- 平衡拦截：默认启用 Ghostery 引擎加载 EasyList 和 EasyPrivacy 网络规则，偏向拦截广告、分析和已知追踪资源，同时避免破坏 ChatGPT 登录、聊天、上传和下载。
 - 外链策略：ChatGPT/OpenAI 核心登录与内容域留在应用内，普通外链交给系统浏览器。
 - Linux 桌面体验：系统标题栏、原生菜单、常用快捷键、下载保存对话框、单实例锁、窗口位置恢复、Wayland 友好启动参数。
 - 启动优化：主窗口立即创建并加载 ChatGPT，追踪器规则在后台初始化，避免首次规则下载拖慢开窗。
@@ -54,6 +54,8 @@ npm run package:linux
 - 清除缓存
 - 清除站点数据/退出登录
 - 查看拦截状态
+- 手动更新拦截规则
+- 设置自动更新间隔
 
 ## 安全边界
 

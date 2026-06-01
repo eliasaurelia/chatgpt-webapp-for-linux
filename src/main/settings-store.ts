@@ -12,13 +12,20 @@ export interface WindowSettings {
 export interface AppSettings {
   blocker: {
     enabled: boolean;
+    updateIntervalHours: number;
+    lastUpdatedAt?: string;
   };
   window: WindowSettings;
 }
 
+export const DEFAULT_BLOCKER_UPDATE_INTERVAL_HOURS = 24;
+export const MIN_BLOCKER_UPDATE_INTERVAL_HOURS = 1;
+export const MAX_BLOCKER_UPDATE_INTERVAL_HOURS = 168;
+
 export const defaultSettings: AppSettings = {
   blocker: {
     enabled: true,
+    updateIntervalHours: DEFAULT_BLOCKER_UPDATE_INTERVAL_HOURS,
   },
   window: {
     width: 1180,
@@ -42,10 +49,34 @@ function sanitizeWindow(value: Partial<WindowSettings> | undefined): WindowSetti
   };
 }
 
+export function sanitizeBlockerUpdateIntervalHours(value: unknown): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return DEFAULT_BLOCKER_UPDATE_INTERVAL_HOURS;
+  }
+
+  return Math.min(
+    MAX_BLOCKER_UPDATE_INTERVAL_HOURS,
+    Math.max(MIN_BLOCKER_UPDATE_INTERVAL_HOURS, Math.round(numeric)),
+  );
+}
+
+function sanitizeTimestamp(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  return Number.isFinite(Date.parse(value)) ? value : undefined;
+}
+
 export function sanitizeSettings(value: Partial<AppSettings> | undefined): AppSettings {
+  const lastUpdatedAt = sanitizeTimestamp(value?.blocker?.lastUpdatedAt);
+
   return {
     blocker: {
       enabled: value?.blocker?.enabled ?? defaultSettings.blocker.enabled,
+      updateIntervalHours: sanitizeBlockerUpdateIntervalHours(value?.blocker?.updateIntervalHours),
+      ...(lastUpdatedAt === undefined ? {} : { lastUpdatedAt }),
     },
     window: sanitizeWindow(value?.window),
   };
@@ -67,4 +98,3 @@ export async function writeSettings(path: string, settings: AppSettings): Promis
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(sanitizeSettings(settings), null, 2)}\n`, 'utf8');
 }
-
