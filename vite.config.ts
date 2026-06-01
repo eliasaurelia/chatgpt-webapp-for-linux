@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  base: './',
   build: {
     outDir: 'dist/renderer',
     emptyOutDir: false,
@@ -13,4 +14,3 @@ export default defineConfig({
     port: 5173,
   },
 });
-
