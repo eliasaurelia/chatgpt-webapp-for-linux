@@ -47,12 +47,136 @@ function normalizeText(value: string): string {
     .trim();
 }
 
+function normalizeMarkdown(value: string): string {
+  return value
+    .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{4,}/g, '\n\n\n')
+    .trim();
+}
+
 function cleanClone(element: HTMLElement): HTMLElement {
   const clone = element.cloneNode(true) as HTMLElement;
   clone.querySelectorAll(
     `[${EXPORT_UI_ATTR}], script, style, noscript, button, svg, [aria-hidden="true"]`,
   ).forEach((node) => node.remove());
   return clone;
+}
+
+function childMarkdown(node: Node): string {
+  return Array.from(node.childNodes).map(nodeToMarkdown).join('');
+}
+
+function inlineMarkdown(node: Node): string {
+  return childMarkdown(node).replace(/[ \t\n]+/g, ' ').trim();
+}
+
+function languageForCodeBlock(element: Element): string {
+  const code = element.matches('code') ? element : element.querySelector('code');
+  const className = code?.className || '';
+  const match = String(className).match(/(?:^|\s)language-([^\s]+)/);
+  return match?.[1] ?? '';
+}
+
+function listItemMarkdown(item: Element, prefix: string): string {
+  const body = normalizeMarkdown(childMarkdown(item));
+  const lines = body.split('\n');
+  const [first = '', ...rest] = lines;
+  return [
+    `${prefix}${first.trim()}`,
+    ...rest.map((line) => (line.trim() ? `  ${line}` : '')),
+  ].join('\n');
+}
+
+function tableMarkdown(table: Element): string {
+  const rows = Array.from(table.querySelectorAll('tr')).map((row) => {
+    return Array.from(row.querySelectorAll('th,td')).map((cell) => inlineMarkdown(cell));
+  }).filter((row) => row.length > 0);
+
+  if (rows.length === 0) {
+    return '';
+  }
+
+  const [header, ...body] = rows;
+  return [
+    `| ${header.map((cell) => cell || ' ').join(' | ')} |`,
+    `| ${header.map(() => '---').join(' | ')} |`,
+    ...body.map((row) => `| ${row.map((cell) => cell || ' ').join(' | ')} |`),
+    '',
+    '',
+  ].join('\n');
+}
+
+function nodeToMarkdown(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return node.textContent ?? '';
+  }
+
+  if (!(node instanceof HTMLElement)) {
+    return '';
+  }
+
+  const tagName = node.tagName.toLowerCase();
+
+  if (tagName === 'br') {
+    return '\n';
+  }
+  if (tagName === 'pre') {
+    const code = node.querySelector('code') ?? node;
+    const language = languageForCodeBlock(code);
+    return `\n\n\`\`\`${language}\n${(code.textContent ?? '').replace(/\n+$/g, '')}\n\`\`\`\n\n`;
+  }
+  if (tagName === 'code') {
+    const text = node.textContent ?? '';
+    return `\`${text.replace(/`/g, '\\`')}\``;
+  }
+  if (tagName === 'strong' || tagName === 'b') {
+    return `**${inlineMarkdown(node)}**`;
+  }
+  if (tagName === 'em' || tagName === 'i') {
+    return `*${inlineMarkdown(node)}*`;
+  }
+  if (tagName === 'a') {
+    const text = inlineMarkdown(node) || node.textContent || '';
+    const href = node.getAttribute('href') ?? '';
+    if (!href || href.trim().toLowerCase().startsWith('javascript:')) {
+      return text;
+    }
+    return `[${text}](${href})`;
+  }
+  if (/^h[1-6]$/.test(tagName)) {
+    const level = Number(tagName.slice(1));
+    return `\n\n${'#'.repeat(level)} ${inlineMarkdown(node)}\n\n`;
+  }
+  if (tagName === 'p') {
+    return `${normalizeMarkdown(childMarkdown(node))}\n\n`;
+  }
+  if (tagName === 'blockquote') {
+    const quote = normalizeMarkdown(childMarkdown(node))
+      .split('\n')
+      .map((line) => `> ${line}`)
+      .join('\n');
+    return `\n\n${quote}\n\n`;
+  }
+  if (tagName === 'ul' || tagName === 'ol') {
+    const ordered = tagName === 'ol';
+    return `${Array.from(node.children)
+      .filter((child) => child.tagName.toLowerCase() === 'li')
+      .map((child, index) => listItemMarkdown(child, ordered ? `${index + 1}. ` : '- '))
+      .join('\n')}\n\n`;
+  }
+  if (tagName === 'table') {
+    return tableMarkdown(node);
+  }
+  if (tagName === 'img') {
+    const alt = node.getAttribute('alt') ?? '';
+    return alt ? `[Image: ${alt}]` : '';
+  }
+  if (tagName === 'li') {
+    return normalizeMarkdown(childMarkdown(node));
+  }
+
+  return childMarkdown(node);
 }
 
 function contentRootForTurn(turn: HTMLElement): HTMLElement {
@@ -80,6 +204,7 @@ function extractMessage(turn: HTMLElement): ChatExportMessage | null {
   return {
     role: normalizeRole(roleNode?.getAttribute('data-message-author-role')),
     text,
+    markdown: normalizeMarkdown(childMarkdown(clone)) || undefined,
     html: clone.innerHTML.trim() || undefined,
   };
 }

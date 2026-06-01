@@ -21,6 +21,16 @@ const sampleExport: ChatExportPayload = {
     {
       role: 'assistant',
       text: 'Sure.\n\nconsole.log("hi")',
+      markdown: [
+        'Sure.',
+        '',
+        '- keeps **bold** text',
+        '- keeps [links](https://example.com)',
+        '',
+        '```js',
+        'console.log("hi")',
+        '```',
+      ].join('\n'),
       html: '<p>Sure.</p><script>alert(1)</script><a href="javascript:alert(1)" onclick="bad()">bad</a>',
     },
   ],
@@ -30,7 +40,7 @@ test('supports the expected chat export formats', () => {
   assert.deepEqual(CHAT_EXPORT_FORMATS, ['markdown', 'html', 'json', 'txt']);
 });
 
-test('formats a conversation as markdown with metadata and role sections', () => {
+test('formats a conversation as markdown while preserving generated message structure', () => {
   const output = formatChatExport(sampleExport, 'markdown');
 
   assert.match(output, /^# Plan \/ Demo: <unsafe>/);
@@ -38,7 +48,9 @@ test('formats a conversation as markdown with metadata and role sections', () =>
   assert.match(output, /## User/);
   assert.match(output, /Give me a tiny demo\./);
   assert.match(output, /## Assistant/);
-  assert.match(output, /console\.log\("hi"\)/);
+  assert.match(output, /- keeps \*\*bold\*\* text/);
+  assert.match(output, /- keeps \[links\]\(https:\/\/example\.com\)/);
+  assert.match(output, /```js\nconsole\.log\("hi"\)\n```/);
 });
 
 test('formats a conversation as safe standalone html', () => {
@@ -52,21 +64,42 @@ test('formats a conversation as safe standalone html', () => {
   assert.doesNotMatch(output, /javascript:/i);
 });
 
-test('formats a conversation as structured json', () => {
+test('formats a conversation as import-friendly ai chat json', () => {
   const output = formatChatExport(sampleExport, 'json');
-  const parsed = JSON.parse(output) as ChatExportPayload & { formatVersion: number };
+  const parsed = JSON.parse(output) as {
+    schema: string;
+    formatVersion: number;
+    messages: Array<{
+      role: string;
+      content: string;
+      contentParts: Array<{ type: string; text: string }>;
+      markdown?: string;
+      html?: string;
+    }>;
+  };
 
-  assert.equal(parsed.formatVersion, 1);
+  assert.equal(parsed.schema, 'ai-chat-export.v1');
+  assert.equal(parsed.formatVersion, 2);
   assert.equal(parsed.messages.length, 2);
   assert.equal(parsed.messages[1]?.role, 'assistant');
+  assert.equal(parsed.messages[1]?.content, 'Sure.\n\nconsole.log("hi")');
+  assert.deepEqual(parsed.messages[1]?.contentParts, [
+    { type: 'text', text: 'Sure.\n\nconsole.log("hi")' },
+  ]);
+  assert.match(parsed.messages[1]?.markdown ?? '', /\*\*bold\*\*/);
+  assert.doesNotMatch(parsed.messages[1]?.html ?? '', /<script/i);
 });
 
-test('formats a conversation as plain text', () => {
+test('formats a conversation as plain text without markdown or html formatting', () => {
   const output = formatChatExport(sampleExport, 'txt');
 
   assert.match(output, /Plan \/ Demo: <unsafe>/);
   assert.match(output, /\[User\]/);
   assert.match(output, /\[Assistant\]/);
+  assert.match(output, /console\.log\("hi"\)/);
+  assert.doesNotMatch(output, /\*\*bold\*\*/);
+  assert.doesNotMatch(output, /```/);
+  assert.doesNotMatch(output, /<p>/);
 });
 
 test('creates safe default filenames for exported chats', () => {

@@ -7,6 +7,7 @@ export type ChatExportRole = 'user' | 'assistant' | 'system' | 'unknown';
 export interface ChatExportMessage {
   role: ChatExportRole;
   text: string;
+  markdown?: string;
   html?: string;
 }
 
@@ -70,7 +71,7 @@ function metadataLines(payload: ChatExportPayload): string[] {
 
 function formatMarkdown(payload: ChatExportPayload): string {
   const sections = payload.messages.map((message) => {
-    return [`## ${roleLabel(message.role)}`, '', message.text.trim()].join('\n');
+    return [`## ${roleLabel(message.role)}`, '', (message.markdown || message.text).trim()].join('\n');
   });
 
   return [
@@ -135,8 +136,42 @@ function formatHtml(payload: ChatExportPayload): string {
   ].join('\n');
 }
 
+function normalizeImportRole(role: ChatExportRole): 'user' | 'assistant' | 'system' {
+  if (role === 'user' || role === 'assistant' || role === 'system') {
+    return role;
+  }
+
+  return 'assistant';
+}
+
 function formatJson(payload: ChatExportPayload): string {
-  return `${JSON.stringify({ formatVersion: 1, ...payload }, null, 2)}\n`;
+  return `${JSON.stringify(
+    {
+      schema: 'ai-chat-export.v1',
+      formatVersion: 2,
+      title: exportTitle(payload),
+      exportedAt: payload.exportedAt ?? new Date().toISOString(),
+      source: {
+        platform: 'chatgpt',
+        url: payload.sourceUrl,
+      },
+      messages: payload.messages.map((message, index) => ({
+        id: `message-${index + 1}`,
+        role: normalizeImportRole(message.role),
+        content: message.text,
+        contentParts: [
+          {
+            type: 'text',
+            text: message.text,
+          },
+        ],
+        ...(message.markdown ? { markdown: message.markdown } : {}),
+        ...(message.html ? { html: sanitizeChatExportHtml(message.html) } : {}),
+      })),
+    },
+    null,
+    2,
+  )}\n`;
 }
 
 export function formatChatExport(payload: ChatExportPayload, format: ChatExportFormat): string {
