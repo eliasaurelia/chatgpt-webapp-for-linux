@@ -7,6 +7,7 @@ import {
   shell,
   type Session,
 } from 'electron';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -17,6 +18,7 @@ import {
   type BlockerStatus,
 } from './blocker-controller.ts';
 import { computeNextBlockerUpdateDelayMs } from './blocker-update-schedule.ts';
+import { createChatExportService, type ChatExportService } from './chat-export-service.ts';
 import { registerIpcHandlers } from './ipc.ts';
 import { installApplicationMenu } from './menu.ts';
 import { shouldGrantPermission } from './permission-policy.ts';
@@ -43,6 +45,7 @@ let mainWindow: BrowserWindow | null = null;
 let privacyWindow: BrowserWindow | null = null;
 let settings: AppSettings;
 let blockerController: BlockerController;
+let chatExportService: ChatExportService;
 let privacyService: PrivacyService;
 let blockerUpdateTimer: NodeJS.Timeout | null = null;
 
@@ -217,7 +220,7 @@ async function createMainWindow(): Promise<void> {
     ...windowOptions,
     title: 'ChatGPT WebApp',
     icon: nativeImage.createFromPath(iconPath()),
-    webPreferences: createSecureWebPreferences(),
+    webPreferences: createSecureWebPreferences(join(__dirname, '..', 'preload', 'chat-export-preload.cjs')),
   });
 
   guardNavigation(mainWindow);
@@ -272,6 +275,14 @@ async function bootstrap(): Promise<void> {
   configureDownloads(chatSession);
 
   privacyService = createPrivacyService(chatSession);
+  chatExportService = createChatExportService({
+    defaultDirectory: app.getPath('downloads'),
+    showSaveDialog: (options) => {
+      const owner = mainWindow ?? BrowserWindow.getFocusedWindow() ?? undefined;
+      return owner ? dialog.showSaveDialog(owner, options) : dialog.showSaveDialog(options);
+    },
+    writeFile: (path, content) => writeFile(path, content, 'utf8'),
+  });
   blockerController = createBlockerController({
     session: chatSession,
     loadEngine: (loadOptions) => loadGhosteryEngine(blockerCachePath(), loadOptions),
@@ -283,6 +294,7 @@ async function bootstrap(): Promise<void> {
     blockerController,
     privacyService,
     getBlockerStatus: blockerStatusForRenderer,
+    saveChatExport: (request) => chatExportService.saveChatExport(request),
     updateBlockerRules: updateBlockerRulesFromNetwork,
     setBlockerUpdateInterval,
   });

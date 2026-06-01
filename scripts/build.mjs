@@ -30,4 +30,14 @@ run('npx', [
   '--external:electron',
   '--outfile=dist/preload/settings-preload.cjs',
 ]);
+run('npx', [
+  'esbuild',
+  'src/preload/chat-export-preload.ts',
+  '--bundle',
+  '--platform=node',
+  '--format=cjs',
+  '--target=node22',
+  '--external:electron',
+  '--outfile=dist/preload/chat-export-preload.cjs',
+]);
 run('npx', ['vite', 'build']);

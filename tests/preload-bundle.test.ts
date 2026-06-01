@@ -9,8 +9,20 @@ test('builds the privacy preload as CommonJS for Electron preload loading', asyn
   assert.match(buildScript, /settings-preload\.cjs/);
 });
 
+test('builds the chat export preload as CommonJS for Electron preload loading', async () => {
+  const buildScript = await readFile('scripts/build.mjs', 'utf8');
+
+  assert.match(buildScript, /chat-export-preload\.cjs/);
+});
+
 test('loads the CommonJS privacy preload bundle from the settings window', async () => {
   const mainSource = await readFile('src/main/main.ts', 'utf8');
 
   assert.match(mainSource, /settings-preload\.cjs/);
+});
+
+test('loads the CommonJS chat export preload bundle from the ChatGPT window', async () => {
+  const mainSource = await readFile('src/main/main.ts', 'utf8');
+
+  assert.match(mainSource, /chat-export-preload\.cjs/);
 });

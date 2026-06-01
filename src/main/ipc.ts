@@ -1,5 +1,6 @@
 import { ipcMain, shell } from 'electron';
 import type { BlockerController, BlockerStatus } from './blocker-controller.ts';
+import type { ChatExportRequest, ChatExportSaveResult } from './chat-export-service.ts';
 import type { PrivacyService } from './privacy-service.ts';
 
 export type RendererBlockerStatus = BlockerStatus & {
@@ -12,6 +13,7 @@ export interface IpcDependencies {
   getBlockerStatus: () => RendererBlockerStatus;
   updateBlockerRules: () => Promise<RendererBlockerStatus>;
   setBlockerUpdateInterval: (hours: number) => Promise<RendererBlockerStatus>;
+  saveChatExport: (request: ChatExportRequest) => Promise<ChatExportSaveResult>;
 }
 
 function isSafeExternalUrl(value: string): boolean {
@@ -29,6 +31,7 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
   ipcMain.removeHandler('privacy.getBlockerStatus');
   ipcMain.removeHandler('privacy.updateBlockerRules');
   ipcMain.removeHandler('privacy.setBlockerUpdateInterval');
+  ipcMain.removeHandler('chatExport.save');
   ipcMain.removeHandler('app.openExternal');
 
   ipcMain.handle('privacy.clearCache', async () => {
@@ -51,6 +54,10 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     }
 
     return dependencies.setBlockerUpdateInterval(Number(hours));
+  });
+
+  ipcMain.handle('chatExport.save', async (_event, request: ChatExportRequest) => {
+    return dependencies.saveChatExport(request);
   });
 
   ipcMain.handle('app.openExternal', async (_event, url: string) => {
