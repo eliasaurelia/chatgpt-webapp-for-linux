@@ -26,3 +26,10 @@ test('loads the CommonJS chat export preload bundle from the ChatGPT window', as
 
   assert.match(mainSource, /chat-export-preload\.cjs/);
 });
+
+test('extracts markdown from the live ChatGPT DOM instead of a detached clone', async () => {
+  const preloadSource = await readFile('src/preload/chat-export-preload.ts', 'utf8');
+
+  assert.match(preloadSource, /markdown:\s*normalizeMarkdown\(childMarkdown\(root\)\)/);
+  assert.doesNotMatch(preloadSource, /markdown:\s*normalizeMarkdown\(childMarkdown\(clone\)\)/);
+});

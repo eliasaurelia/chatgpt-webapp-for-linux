@@ -167,6 +167,14 @@ function nodeToMarkdown(node: Node): string {
 
   const tagName = node.tagName.toLowerCase();
 
+  if (
+    node.hasAttribute(EXPORT_UI_ATTR)
+    || ['button', 'svg', 'script', 'style', 'noscript'].includes(tagName)
+    || node.getAttribute('aria-hidden') === 'true'
+  ) {
+    return '';
+  }
+
   if (tagName === 'br') {
     return '\n';
   }
@@ -176,6 +184,12 @@ function nodeToMarkdown(node: Node): string {
     return `\n\n\`\`\`${language}\n${codeBlockText(code)}\n\`\`\`\n\n`;
   }
   if (tagName === 'code') {
+    const language = languageForCodeBlock(node);
+    const parentTagName = node.parentElement?.tagName.toLowerCase();
+    if (language || parentTagName === 'div') {
+      return `\n\n\`\`\`${language}\n${codeBlockText(node)}\n\`\`\`\n\n`;
+    }
+
     const text = node.textContent ?? '';
     return `\`${text.replace(/`/g, '\\`')}\``;
   }
@@ -244,7 +258,7 @@ function extractMessage(turn: HTMLElement): ChatExportMessage | null {
     : turn.querySelector<HTMLElement>('[data-message-author-role]');
   const root = contentRootForTurn(turn);
   const clone = cleanClone(root);
-  const text = normalizeText(clone.innerText || clone.textContent || '');
+  const text = normalizeText(renderedText(root) || clone.textContent || '');
 
   if (!text) {
     return null;
@@ -253,7 +267,7 @@ function extractMessage(turn: HTMLElement): ChatExportMessage | null {
   return {
     role: normalizeRole(roleNode?.getAttribute('data-message-author-role')),
     text,
-    markdown: normalizeMarkdown(childMarkdown(clone)) || undefined,
+    markdown: normalizeMarkdown(childMarkdown(root)) || undefined,
     html: clone.innerHTML.trim() || undefined,
   };
 }
