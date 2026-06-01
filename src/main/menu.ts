@@ -7,6 +7,7 @@ export interface MenuDependencies {
   openSettingsWindow(): void;
   privacyService: PrivacyService;
   reloadMainWindow(): void;
+  showPageSearch(): void;
   updateBlockerRules(): Promise<unknown>;
 }
 
@@ -34,6 +35,12 @@ export function installApplicationMenu(dependencies: MenuDependencies): void {
         { role: 'copy' },
         { role: 'paste' },
         { role: 'selectAll' },
+        { type: 'separator' },
+        {
+          label: 'Find in Page',
+          accelerator: 'CmdOrCtrl+F',
+          click: dependencies.showPageSearch,
+        },
       ],
     },
     {

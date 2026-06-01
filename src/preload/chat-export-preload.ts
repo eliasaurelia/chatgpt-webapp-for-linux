@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron';
 import {
   CHAT_EXPORT_FORMATS,
+  joinCodeBlockLines,
   type ChatExportFormat,
   type ChatExportMessage,
   type ChatExportPayload,
@@ -9,6 +10,7 @@ import {
 
 const EXPORT_UI_ATTR = 'data-chatgpt-webapp-export-ui';
 const EXPORT_TURN_ATTR = 'data-chatgpt-webapp-export-turn';
+const SEARCH_UI_ATTR = 'data-chatgpt-webapp-search-ui';
 const CHAT_HOSTS = new Set(['chatgpt.com', 'chat.openai.com']);
 
 type ExportScope = 'conversation' | 'message';
@@ -19,12 +21,22 @@ interface ExportSaveResult {
   canceled?: boolean;
 }
 
+interface PageSearchResultPayload {
+  activeMatchOrdinal: number;
+  matches: number;
+  finalUpdate: boolean;
+}
+
 let activeScope: ExportScope = 'conversation';
 let activeTurn: HTMLElement | null = null;
 let shadowRoot: ShadowRoot | null = null;
 let menuElement: HTMLElement | null = null;
 let menuCaption: HTMLElement | null = null;
 let toastElement: HTMLElement | null = null;
+let searchPanel: HTMLElement | null = null;
+let searchInput: HTMLInputElement | null = null;
+let searchCount: HTMLElement | null = null;
+let searchTimer: number | undefined;
 let observer: MutationObserver | null = null;
 
 function isChatPage(): boolean {
@@ -78,6 +90,43 @@ function languageForCodeBlock(element: Element): string {
   return match?.[1] ?? '';
 }
 
+function renderedText(element: Element): string {
+  return 'innerText' in element
+    ? String((element as HTMLElement).innerText)
+    : element.textContent ?? '';
+}
+
+function directCodeLineElements(element: Element): Element[] {
+  const directChildren = Array.from(element.children);
+  const blockChildren = directChildren.filter((child) => {
+    const className = String(child.getAttribute('class') ?? '');
+    const hasLineHint = child.hasAttribute('data-line')
+      || /\b(line|code-line)\b/.test(className);
+    if (hasLineHint) {
+      return true;
+    }
+
+    const display = window.getComputedStyle(child).display;
+    return display === 'block' || display === 'list-item';
+  });
+
+  return blockChildren.length > 1 ? blockChildren : [];
+}
+
+function codeBlockText(element: Element): string {
+  const rendered = renderedText(element);
+  if (rendered.includes('\n')) {
+    return joinCodeBlockLines(rendered.split('\n'));
+  }
+
+  const lineElements = directCodeLineElements(element);
+  if (lineElements.length > 1) {
+    return joinCodeBlockLines(lineElements.map(renderedText));
+  }
+
+  return joinCodeBlockLines([(element.textContent ?? '').replace(/\n+$/g, '')]);
+}
+
 function listItemMarkdown(item: Element, prefix: string): string {
   const body = normalizeMarkdown(childMarkdown(item));
   const lines = body.split('\n');
@@ -124,7 +173,7 @@ function nodeToMarkdown(node: Node): string {
   if (tagName === 'pre') {
     const code = node.querySelector('code') ?? node;
     const language = languageForCodeBlock(code);
-    return `\n\n\`\`\`${language}\n${(code.textContent ?? '').replace(/\n+$/g, '')}\n\`\`\`\n\n`;
+    return `\n\n\`\`\`${language}\n${codeBlockText(code)}\n\`\`\`\n\n`;
   }
   if (tagName === 'code') {
     const text = node.textContent ?? '';
@@ -278,6 +327,67 @@ function closeMenu(): void {
   }
 }
 
+function updateSearchCount(result?: PageSearchResultPayload): void {
+  if (!searchCount) {
+    return;
+  }
+
+  if (!result || result.matches === 0) {
+    searchCount.textContent = '0 / 0';
+    return;
+  }
+
+  searchCount.textContent = `${result.activeMatchOrdinal} / ${result.matches}`;
+}
+
+function runSearch(findNext = false, forward = true): void {
+  const query = searchInput?.value ?? '';
+  void ipcRenderer.invoke('pageSearch.find', {
+    query,
+    forward,
+    findNext,
+  }).catch((error: unknown) => {
+    showToast(error instanceof Error ? error.message : 'Search failed');
+  });
+}
+
+function scheduleSearch(): void {
+  if (searchTimer !== undefined) {
+    window.clearTimeout(searchTimer);
+  }
+
+  searchTimer = window.setTimeout(() => {
+    updateSearchCount();
+    runSearch(false, true);
+  }, 120);
+}
+
+function openSearchPanel(): void {
+  if (!isChatPage()) {
+    return;
+  }
+  ensureHostUi();
+
+  if (!searchPanel || !searchInput) {
+    return;
+  }
+
+  searchPanel.hidden = false;
+  searchInput.focus();
+  searchInput.select();
+  if (searchInput.value) {
+    runSearch(false, true);
+  }
+}
+
+function closeSearchPanel(clearSelection = false): void {
+  if (searchPanel) {
+    searchPanel.hidden = true;
+  }
+
+  void ipcRenderer.invoke('pageSearch.stop', { clearSelection }).catch(() => undefined);
+}
+
 function openMenu(scope: ExportScope, turn: HTMLElement | null): void {
   activeScope = scope;
   activeTurn = turn;
@@ -345,6 +455,48 @@ function ensureHostUi(): void {
       gap: 8px;
       font: 13px system-ui, sans-serif;
     }
+    .search-panel {
+      position: fixed;
+      right: 18px;
+      top: 18px;
+      z-index: 2147483647;
+      display: grid;
+      grid-template-columns: minmax(180px, 280px) auto auto auto auto;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid rgba(122, 128, 121, .35);
+      border-radius: 8px;
+      background: rgba(245, 246, 240, .98);
+      color: #222720;
+      box-shadow: 0 16px 38px rgba(0, 0, 0, .22);
+      padding: 8px;
+      font: 13px system-ui, sans-serif;
+    }
+    .search-panel[hidden] { display: none; }
+    .search-input {
+      min-width: 0;
+      height: 32px;
+      border: 1px solid rgba(116, 123, 116, .42);
+      border-radius: 7px;
+      background: #fff;
+      color: #222720;
+      font: 14px system-ui, sans-serif;
+      padding: 0 9px;
+      outline: none;
+    }
+    .search-input:focus { border-color: rgba(39, 112, 93, .75); }
+    .search-count {
+      min-width: 48px;
+      color: #5e665f;
+      font-size: 12px;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .icon {
+      min-width: 34px;
+      padding: 0;
+      text-align: center;
+    }
     button {
       border: 1px solid rgba(116, 123, 116, .42);
       border-radius: 8px;
@@ -408,6 +560,9 @@ function ensureHostUi(): void {
       .caption { color: #b7beb7; }
       .format { color: #f7f7f2; }
       .format:hover { background: rgba(255, 255, 255, .08); }
+      .search-panel { background: rgba(31, 35, 31, .97); color: #f7f7f2; }
+      .search-input { background: rgba(255, 255, 255, .08); color: #f7f7f2; }
+      .search-count { color: #b7beb7; }
     }
   `;
 
@@ -440,8 +595,53 @@ function ensureHostUi(): void {
   toastElement.className = 'toast';
   toastElement.dataset.visible = 'false';
 
+  searchPanel = document.createElement('div');
+  searchPanel.className = 'search-panel';
+  searchPanel.hidden = true;
+  searchInput = document.createElement('input');
+  searchInput.className = 'search-input';
+  searchInput.type = 'search';
+  searchInput.placeholder = 'Find in page';
+  searchInput.addEventListener('input', scheduleSearch);
+  searchInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      runSearch(true, !event.shiftKey);
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeSearchPanel();
+    }
+  });
+  searchCount = document.createElement('span');
+  searchCount.className = 'search-count';
+  searchCount.textContent = '0 / 0';
+
+  const previousButton = document.createElement('button');
+  previousButton.type = 'button';
+  previousButton.className = 'icon';
+  previousButton.textContent = '↑';
+  previousButton.title = 'Previous match';
+  previousButton.addEventListener('click', () => runSearch(true, false));
+
+  const nextButton = document.createElement('button');
+  nextButton.type = 'button';
+  nextButton.className = 'icon';
+  nextButton.textContent = '↓';
+  nextButton.title = 'Next match';
+  nextButton.addEventListener('click', () => runSearch(true, true));
+
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.className = 'icon';
+  closeButton.textContent = '×';
+  closeButton.title = 'Close search';
+  closeButton.addEventListener('click', () => closeSearchPanel());
+
+  searchPanel.append(searchInput, searchCount, previousButton, nextButton, closeButton);
+
   launcher.append(menuElement, exportButton);
-  shadowRoot.append(style, launcher, toastElement);
+  shadowRoot.append(style, searchPanel, launcher, toastElement);
 }
 
 function ensurePageStyle(): void {
@@ -515,6 +715,18 @@ function installExportUi(): void {
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
 }
+
+document.addEventListener('keydown', (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
+    event.preventDefault();
+    openSearchPanel();
+  }
+}, true);
+
+ipcRenderer.on('pageSearch.show', openSearchPanel);
+ipcRenderer.on('pageSearch.result', (_event, result: PageSearchResultPayload) => {
+  updateSearchCount(result);
+});
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', installExportUi, { once: true });

@@ -25,6 +25,13 @@ export const CHAT_EXPORT_EXTENSIONS: Record<ChatExportFormat, string> = {
   txt: 'txt',
 };
 
+export function joinCodeBlockLines(lines: string[]): string {
+  return lines
+    .map((line) => line.replace(/\u00a0/g, ' ').replace(/\s+$/g, ''))
+    .join('\n')
+    .replace(/\n+$/g, '');
+}
+
 const CHAT_EXPORT_LABELS: Record<ChatExportRole, string> = {
   user: 'User',
   assistant: 'Assistant',

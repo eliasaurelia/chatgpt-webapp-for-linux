@@ -1,6 +1,12 @@
 import { ipcMain, shell } from 'electron';
 import type { BlockerController, BlockerStatus } from './blocker-controller.ts';
 import type { ChatExportRequest, ChatExportSaveResult } from './chat-export-service.ts';
+import type {
+  PageSearchRequest,
+  PageSearchResult,
+  PageSearchService,
+  PageSearchStopRequest,
+} from './page-search-service.ts';
 import type { PrivacyService } from './privacy-service.ts';
 
 export type RendererBlockerStatus = BlockerStatus & {
@@ -9,6 +15,7 @@ export type RendererBlockerStatus = BlockerStatus & {
 
 export interface IpcDependencies {
   blockerController: BlockerController;
+  pageSearchService: PageSearchService;
   privacyService: PrivacyService;
   getBlockerStatus: () => RendererBlockerStatus;
   updateBlockerRules: () => Promise<RendererBlockerStatus>;
@@ -32,6 +39,8 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
   ipcMain.removeHandler('privacy.updateBlockerRules');
   ipcMain.removeHandler('privacy.setBlockerUpdateInterval');
   ipcMain.removeHandler('chatExport.save');
+  ipcMain.removeHandler('pageSearch.find');
+  ipcMain.removeHandler('pageSearch.stop');
   ipcMain.removeHandler('app.openExternal');
 
   ipcMain.handle('privacy.clearCache', async () => {
@@ -58,6 +67,14 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
 
   ipcMain.handle('chatExport.save', async (_event, request: ChatExportRequest) => {
     return dependencies.saveChatExport(request);
+  });
+
+  ipcMain.handle('pageSearch.find', async (_event, request: PageSearchRequest): Promise<PageSearchResult> => {
+    return dependencies.pageSearchService.find(request);
+  });
+
+  ipcMain.handle('pageSearch.stop', async (_event, request?: PageSearchStopRequest): Promise<PageSearchResult> => {
+    return dependencies.pageSearchService.stop(request);
   });
 
   ipcMain.handle('app.openExternal', async (_event, url: string) => {

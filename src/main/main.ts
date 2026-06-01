@@ -21,6 +21,7 @@ import { computeNextBlockerUpdateDelayMs } from './blocker-update-schedule.ts';
 import { createChatExportService, type ChatExportService } from './chat-export-service.ts';
 import { registerIpcHandlers } from './ipc.ts';
 import { installApplicationMenu } from './menu.ts';
+import { createPageSearchService, type PageSearchService } from './page-search-service.ts';
 import { shouldGrantPermission } from './permission-policy.ts';
 import { createPrivacyService, type PrivacyService } from './privacy-service.ts';
 import {
@@ -46,6 +47,7 @@ let privacyWindow: BrowserWindow | null = null;
 let settings: AppSettings;
 let blockerController: BlockerController;
 let chatExportService: ChatExportService;
+let pageSearchService: PageSearchService;
 let privacyService: PrivacyService;
 let blockerUpdateTimer: NodeJS.Timeout | null = null;
 
@@ -224,6 +226,13 @@ async function createMainWindow(): Promise<void> {
   });
 
   guardNavigation(mainWindow);
+  mainWindow.webContents.on('found-in-page', (_event, result) => {
+    mainWindow?.webContents.send('pageSearch.result', {
+      activeMatchOrdinal: result.activeMatchOrdinal,
+      matches: result.matches,
+      finalUpdate: result.finalUpdate,
+    });
+  });
 
   if (settings.window.maximized) {
     mainWindow.maximize();
@@ -283,6 +292,9 @@ async function bootstrap(): Promise<void> {
     },
     writeFile: (path, content) => writeFile(path, content, 'utf8'),
   });
+  pageSearchService = createPageSearchService({
+    getWebContents: () => mainWindow?.webContents,
+  });
   blockerController = createBlockerController({
     session: chatSession,
     loadEngine: (loadOptions) => loadGhosteryEngine(blockerCachePath(), loadOptions),
@@ -292,6 +304,7 @@ async function bootstrap(): Promise<void> {
 
   registerIpcHandlers({
     blockerController,
+    pageSearchService,
     privacyService,
     getBlockerStatus: blockerStatusForRenderer,
     saveChatExport: (request) => chatExportService.saveChatExport(request),
@@ -311,6 +324,7 @@ async function bootstrap(): Promise<void> {
         openSettingsWindow: openPrivacyWindow,
         privacyService,
         reloadMainWindow: () => mainWindow?.reload(),
+        showPageSearch: () => mainWindow?.webContents.send('pageSearch.show'),
         updateBlockerRules: updateBlockerRulesFromNetwork,
       });
     },

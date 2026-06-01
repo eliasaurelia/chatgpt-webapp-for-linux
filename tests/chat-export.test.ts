@@ -5,6 +5,7 @@ import {
   CHAT_EXPORT_FORMATS,
   createChatExportFileName,
   formatChatExport,
+  joinCodeBlockLines,
   type ChatExportPayload,
 } from '../src/shared/chat-export.ts';
 
@@ -51,6 +52,23 @@ test('formats a conversation as markdown while preserving generated message stru
   assert.match(output, /- keeps \*\*bold\*\* text/);
   assert.match(output, /- keeps \[links\]\(https:\/\/example\.com\)/);
   assert.match(output, /```js\nconsole\.log\("hi"\)\n```/);
+});
+
+test('preserves line breaks when markdown code blocks are extracted from rendered line nodes', () => {
+  assert.equal(
+    joinCodeBlockLines([
+      'python3 -m venv ~/.venvs/glmocr',
+      'source ~/.venvs/glmocr/bin/activate',
+      'pip install -U pip',
+      'pip install glmocr',
+    ]),
+    [
+      'python3 -m venv ~/.venvs/glmocr',
+      'source ~/.venvs/glmocr/bin/activate',
+      'pip install -U pip',
+      'pip install glmocr',
+    ].join('\n'),
+  );
 });
 
 test('formats a conversation as safe standalone html', () => {
