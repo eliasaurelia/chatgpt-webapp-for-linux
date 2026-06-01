@@ -40,8 +40,8 @@ npm run package:linux
 
 产物输出到 `release/`：
 
-- `ChatGPT WebApp-0.2.1.AppImage`
-- `chatgpt-webapp-linux_0.2.1_amd64.deb`
+- `ChatGPT WebApp-0.3.0.AppImage`
+- `chatgpt-webapp-linux_0.3.0_amd64.deb`
 
 ## 本地数据
 
