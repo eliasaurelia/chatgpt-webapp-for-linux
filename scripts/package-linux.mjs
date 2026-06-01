@@ -1,4 +1,4 @@
-import { cp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -18,6 +18,7 @@ function run(command, args, env = {}) {
 const root = process.cwd();
 const stageDir = join(root, '.build', 'app');
 const ghosteryScopeDir = join(stageDir, 'node_modules', '@ghostery');
+const packageJson = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 
 async function copyGhosteryRuntimePackage(packageName) {
   await cp(join(root, 'node_modules', '@ghostery', packageName), join(ghosteryScopeDir, packageName), {
@@ -39,16 +40,13 @@ await writeFile(
   join(stageDir, 'package.json'),
   `${JSON.stringify(
     {
-      name: 'chatgpt-webapp-linux',
-      version: '0.1.0',
-      description: 'A privacy-isolated Linux desktop webapp for ChatGPT.',
-      homepage: 'https://chatgpt.com',
+      name: packageJson.name,
+      version: packageJson.version,
+      description: packageJson.description,
+      homepage: packageJson.homepage,
       type: 'module',
       main: 'dist/main/main.js',
-      author: {
-        name: 'Local Desktop App',
-        email: 'local@example.invalid',
-      },
+      author: packageJson.author,
       dependencies: {
         '@ghostery/adblocker-electron-preload': '2.17.3',
       },
