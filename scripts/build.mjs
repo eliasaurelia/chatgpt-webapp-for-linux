@@ -25,9 +25,9 @@ run('npx', [
   'src/preload/settings-preload.ts',
   '--bundle',
   '--platform=node',
-  '--format=esm',
+  '--format=cjs',
   '--target=node22',
   '--external:electron',
-  '--outfile=dist/preload/settings-preload.js',
+  '--outfile=dist/preload/settings-preload.cjs',
 ]);
 run('npx', ['vite', 'build']);

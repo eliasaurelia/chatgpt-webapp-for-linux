@@ -253,7 +253,7 @@ function openPrivacyWindow(): void {
     show: false,
     backgroundColor: '#f7f7f2',
     icon: nativeImage.createFromPath(iconPath()),
-    webPreferences: createSecureWebPreferences(join(__dirname, '..', 'preload', 'settings-preload.js')),
+    webPreferences: createSecureWebPreferences(join(__dirname, '..', 'preload', 'settings-preload.cjs')),
   });
 
   privacyWindow.removeMenu();

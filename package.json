@@ -13,8 +13,10 @@
     "build": "node scripts/build.mjs",
     "package:linux": "node scripts/package-linux.mjs"
   },
+  "dependencies": {
+    "@ghostery/adblocker-electron": "^2.11.6"
+  },
   "devDependencies": {
-    "@ghostery/adblocker-electron": "^2.11.6",
     "@types/node": "^22.15.29",
     "electron": "^42.3.0",
     "electron-builder": "^26.0.12",

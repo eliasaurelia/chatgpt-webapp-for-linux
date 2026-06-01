@@ -2,6 +2,11 @@ import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+import {
+  collectRuntimeDependencyVersions,
+  copyRuntimeDependencyClosure,
+} from './runtime-dependencies.mjs';
+
 function run(command, args, env = {}) {
   const result = spawnSync(command, args, {
     stdio: 'inherit',
@@ -17,14 +22,8 @@ function run(command, args, env = {}) {
 
 const root = process.cwd();
 const stageDir = join(root, '.build', 'app');
-const ghosteryScopeDir = join(stageDir, 'node_modules', '@ghostery');
 const packageJson = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
-
-async function copyGhosteryRuntimePackage(packageName) {
-  await cp(join(root, 'node_modules', '@ghostery', packageName), join(ghosteryScopeDir, packageName), {
-    recursive: true,
-  });
-}
+const runtimePackageNames = Object.keys(packageJson.dependencies ?? {});
 
 run('npm', ['run', 'build']);
 
@@ -32,10 +31,12 @@ await rm(stageDir, { recursive: true, force: true });
 await mkdir(stageDir, { recursive: true });
 await cp(join(root, 'dist'), join(stageDir, 'dist'), { recursive: true });
 await cp(join(root, 'assets'), join(stageDir, 'assets'), { recursive: true });
-await mkdir(ghosteryScopeDir, { recursive: true });
-await copyGhosteryRuntimePackage('adblocker-electron-preload');
-await copyGhosteryRuntimePackage('adblocker-content');
-await copyGhosteryRuntimePackage('adblocker-extended-selectors');
+const copiedRuntimeDependencies = await copyRuntimeDependencyClosure({
+  root,
+  stageDir,
+  packageNames: runtimePackageNames,
+});
+const runtimeDependencyVersions = await collectRuntimeDependencyVersions(root, copiedRuntimeDependencies);
 await writeFile(
   join(stageDir, 'package.json'),
   `${JSON.stringify(
@@ -47,9 +48,7 @@ await writeFile(
       type: 'module',
       main: 'dist/main/main.js',
       author: packageJson.author,
-      dependencies: {
-        '@ghostery/adblocker-electron-preload': '2.17.3',
-      },
+      dependencies: runtimeDependencyVersions,
       packageManager: 'traversal@0.0.0',
     },
     null,
