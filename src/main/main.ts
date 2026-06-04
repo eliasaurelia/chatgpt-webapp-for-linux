@@ -19,6 +19,7 @@ import {
 } from './blocker-controller.ts';
 import { computeNextBlockerUpdateDelayMs } from './blocker-update-schedule.ts';
 import { createChatExportService, type ChatExportService } from './chat-export-service.ts';
+import { applyLinuxChromiumFlags, loadUserChromiumFlags } from './chromium-flags.ts';
 import { registerIpcHandlers } from './ipc.ts';
 import { installApplicationMenu } from './menu.ts';
 import { createPageSearchService, type PageSearchService } from './page-search-service.ts';
@@ -56,8 +57,18 @@ function configureLinuxChromium(): void {
     return;
   }
 
-  app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
-  app.commandLine.appendSwitch('enable-features', 'WaylandWindowDecorations');
+  const userFlags = loadUserChromiumFlags();
+  applyLinuxChromiumFlags(app.commandLine, userFlags.flags);
+
+  if (userFlags.error) {
+    console.warn(`Failed to read Chromium flags from ${userFlags.path}:`, userFlags.error);
+  }
+
+  for (const invalidLine of userFlags.invalidLines) {
+    console.warn(
+      `Ignoring invalid Chromium flag in ${userFlags.path}:${invalidLine.lineNumber}: ${invalidLine.text}`,
+    );
+  }
 }
 
 function iconPath(): string {

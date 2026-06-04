@@ -43,6 +43,18 @@ npm run package:linux
 - `ChatGPT WebApp-0.3.3.AppImage`
 - `chatgpt-webapp-linux_0.3.3_amd64.deb`
 
+## Chromium Flags
+
+Linux 下可通过 `~/.config/chatgpt-webapp-flags.conf` 追加 Chromium/Electron 启动参数。文件格式为每行一个 flag，支持空行和以 `#` 开头的注释行：
+
+```text
+# Force Wayland
+--ozone-platform=wayland
+--enable-wayland-ime
+```
+
+应用内置的 Linux 默认参数会先应用，配置文件中的参数随后追加。
+
 ## 本地数据
 
 应用设置文件只包含窗口状态和拦截器开关，默认路径位于 Electron 的 `userData` 目录下：
