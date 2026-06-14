@@ -3,7 +3,7 @@ const path = require('node:path');
 module.exports = {
   appId: 'local.chatgpt.webapp.linux',
   productName: 'ChatGPT WebApp',
-  electronVersion: '42.3.3',
+  electronVersion: '42.4.0',
   npmRebuild: false,
   directories: {
     output: path.join(__dirname, 'release'),
